@@ -1,211 +1,83 @@
-use std;
+// src/gui.rs
+use crate::config::{AppConfig, ColorsConfig};
+use eframe::egui::{self, CentralPanel, Context, FontData, FontDefinitions, FontFamily, TextEdit};
+use eframe::{App, CreationContext};
 
-use conrod::{self, widget, Colorable, Positionable, Widget, Sizeable, Borderable};
-use conrod::backend::glium::glium;
-use conrod::backend::glium::glium::Surface;
-
-use conrod::backend::glium::glium::glutin::VirtualKeyCode;
-
-use config::Config;
-use gui_result::GuiResult;
-
-struct State {
+pub struct RMenuApp {
     input_text: String,
-    selected: usize,
+    selected_index: usize,
+    options: Vec<String>,
+    colors: ColorsConfig,
+    app_config: AppConfig,
 }
 
-#[doc = "Runs the menu with the default config.
- The process function will filter the output based on the input."]
-pub fn run<F, T>(process: F) -> GuiResult<T>
-where
-    F: Fn(&str) -> Vec<T>,
-    T: Into<String> + From<String> + Clone,
-{
-    run_config(process, &Config::default())
+impl RMenuApp {
+    pub fn new(cc: &CreationContext<'_>, colors: ColorsConfig, app_config: AppConfig) -> Self {
+        // Customize fonts if needed
+        let mut fonts = FontDefinitions::default();
+        fonts.font_data.insert(
+            "custom".to_string(),
+            FontData::from_static(include_bytes!("../fonts/Ubuntu-M.ttf")),
+        );
+        fonts
+            .families
+            .entry(FontFamily::Proportional)
+            .or_default()
+            .insert(0, "custom".to_string());
+        cc.egui_ctx.set_fonts(fonts);
+
+        Self {
+            input_text: String::new(),
+            selected_index: 0,
+            options: Vec::new(),
+            colors,
+            app_config,
+        }
+    }
+
+    fn update_options(&mut self) {
+        // Placeholder for filtering logic
+        self.options = vec![
+            "Option 1".to_string(),
+            "Option 2".to_string(),
+            "Option 3".to_string(),
+        ]
+        .into_iter()
+        .filter(|opt| opt.to_lowercase().contains(&self.input_text.to_lowercase()))
+        .collect();
+    }
 }
 
-#[doc = "Runs with a configuration. See [run](fn.run.html)"]
-pub fn run_config<F, T>(process: F, configuration: &Config) -> GuiResult<T>
-where
-    F: Fn(&str) -> Vec<T>,
-    T: Into<String> + From<String> + Clone,
-{
-    let mut events_loop = glium::glutin::EventsLoop::new();
-    let window = glium::glutin::WindowBuilder::new()
-        .with_fullscreen(Some(events_loop.get_primary_monitor()))
-        .with_title("Rmenu");
-    let context = glium::glutin::ContextBuilder::new()
-        .with_vsync(true)
-        .with_multisampling(4);
-    let display = glium::Display::new(window, context, &events_loop).unwrap();
+impl App for RMenuApp {
+    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+        CentralPanel::default().show(ctx, |ui| {
+            ui.visuals_mut().override_text_color = Some(egui::Color32::from_rgb(
+                (self.colors.text[0] * 255.0) as u8,
+                (self.colors.text[1] * 255.0) as u8,
+                (self.colors.text[2] * 255.0) as u8,
+            ));
+            ui.style_mut().override_font_size = Some(self.colors.font_size);
 
-    // construct our `Ui`.
-    let dimensions = events_loop.get_primary_monitor().get_dimensions();
-    let mut ui = conrod::UiBuilder::new([dimensions.0 as f64, dimensions.1 as f64]).build();
+            ui.add(
+                TextEdit::singleline(&mut self.input_text)
+                    .hint_text("Type to filter...")
+                    .desired_width(f32::INFINITY),
+            );
 
-    // Generate the widget identifiers.
-    let ids = Ids::new(ui.widget_id_generator());
-
-    // Add a `Font` to the `Ui`'s `font::Map` from file.
-    ui.fonts.insert_from_file(&configuration.font).unwrap();
-
-    // A type used for converting `conrod::render::Primitives` into `Command`s that can be used
-    // for drawing to the glium `Surface`.
-    let mut renderer = conrod::backend::glium::Renderer::new(&display).unwrap();
-
-    // The image map describing each of our widget->image mappings (in our case, none).
-    let image_map = conrod::image::Map::<glium::texture::Texture2d>::new();
-
-    let mut state = State {
-        input_text: String::new(),
-        selected: 0,
-    };
-
-    let mut answer = GuiResult::Cancel;
-
-    events_loop.run_forever(|event| {
-
-        // Break from the loop upon `Escape` or closed window.
-        match event.clone() {
-            glium::glutin::Event::WindowEvent { event, .. } => {
-                match event {
-                    glium::glutin::WindowEvent::Closed => return glium::glutin::ControlFlow::Break,
-                    glium::glutin::WindowEvent::KeyboardInput {
-                        input: glium::glutin::KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::Escape), ..
-                        },
-                        ..
-                    } if !configuration.disable_esc => return glium::glutin::ControlFlow::Break,
-                    glium::glutin::WindowEvent::KeyboardInput {
-                        input: glium::glutin::KeyboardInput {
-                            virtual_keycode: Some(keycode),
-                            state: glium::glutin::ElementState::Pressed,
-                            ..
-                        },
-                        ..
-                    } => {
-                        match keycode {
-                            VirtualKeyCode::Up => {
-                                state.selected = state.selected.saturating_sub(1);
-                            }
-                            VirtualKeyCode::Down => {
-                                state.selected = state.selected.saturating_add(1);
-                            }
-                            _ => {}
-                        }
-                    }
-                    _ => (),
-                }
+            if ui.button("Search").clicked() {
+                self.update_options();
             }
-            _ => (),
-        }
 
-        // Use the `winit` backend feature to convert the winit event to a conrod one.
-        let input = match conrod::backend::winit::convert_event(event, &display) {
-            None => return glium::glutin::ControlFlow::Continue,
-            Some(input) => input,
-        };
-
-        // Handle the input with the `Ui`.
-        ui.handle_event(input);
-
-        // Set the widgets.
-        {
-            let ui = &mut ui.set_widgets();
-            if let Some(ans) = set_widgets(ui, &ids, &mut state, &process, configuration) {
-                answer = ans;
-                return glium::glutin::ControlFlow::Break;
-            }
-        }
-
-        // Draw the `Ui` if it has changed.
-        if let Some(primitives) = ui.draw_if_changed() {
-            renderer.fill(&display, primitives, &image_map);
-            let mut target = display.draw();
-            target.clear_color(0.0, 0.0, 0.0, 1.0);
-            renderer.draw(&display, &mut target, &image_map).unwrap();
-            target.finish().unwrap();
-        }
-
-        glium::glutin::ControlFlow::Continue
-    });
-
-    // TODO: Try to close the window
-
-    answer
-}
-
-widget_ids!(struct Ids { canvas, scrollbar, input, output });
-
-fn set_widgets<F, T>(
-    ui: &mut conrod::UiCell,
-    ids: &Ids,
-    state: &mut State,
-    process: &F,
-    config: &Config,
-) -> Option<GuiResult<T>>
-where
-    F: Fn(&str) -> Vec<T>,
-    T: Into<String> + From<String> + Clone,
-{
-    let canvas = widget::Canvas::new().scroll_kids_vertically().color(
-        config.canvas_color,
-    );
-    canvas.set(ids.canvas, ui);
-    let height = canvas.get_h(ui).unwrap();
-
-    let list = process(&state.input_text);
-    state.selected = std::cmp::min(state.selected, list.len().saturating_sub(1));
-
-    let mut is_confirmed = false;
-
-    for event in widget::TextBox::new(&state.input_text)
-        .color(config.input_color)
-        .xy(
-            [
-                0.0,
-                height / 2.0 - config.input_top_padding - config.input_size[1] / 2.0,
-            ],
-        )
-        .wh(config.input_size)
-        .center_justify()
-        .border(config.input_border)
-        .border_color(config.input_border_color)
-        .set(ids.input, ui)
-    {
-        match event {
-            widget::text_box::Event::Update(edit) => {
-                state.input_text = edit;
-            }
-            widget::text_box::Event::Enter => {
-                if list.is_empty() {
-                    return Some(GuiResult::Custom(T::from(state.input_text.clone())));
+            for (i, option) in self.options.iter().enumerate() {
+                let label = if i == self.selected_index {
+                    format!("> {}", option)
                 } else {
-                    is_confirmed = true;
+                    option.clone()
+                };
+                if ui.button(label).clicked() {
+                    self.selected_index = i;
                 }
             }
-        }
+        });
     }
-
-    let (mut items, _) = widget::List::flow_down(list.len())
-        .down_from(ids.input, config.input_size[1] + config.output_top_padding)
-        .wh(config.output_size)
-        .set(ids.output, ui);
-    while let Some(item) = items.next(ui) {
-        let i = item.i;
-        let contents: String = list[i].clone().into();
-        let text = widget::Text::new(&contents)
-            .color(if i == state.selected {
-                if is_confirmed {
-                    return Some(GuiResult::Option(list[i].clone()));
-                }
-                config.selected_color
-            } else {
-                config.unselected_color
-            })
-            .center_justify();
-        item.set(text, ui);
-    }
-
-    None
 }

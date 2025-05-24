@@ -1,61 +1,70 @@
-use conrod::color::{self, Color};
+use directories::ProjectDirs;
+use ron::de::from_str;
+use ron::ser::{to_string_pretty, PrettyConfig};
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::io::{Read, Write};
+use std::path::PathBuf;
 
-#[doc = "Configuration for the GUI. Check source for what the defaults are.
-
-**Note**: ALWAYS add `..Default::default()` when creating a Config
-since I may add more configuration options and I will consider it a non breaking change."]
-pub struct Config {
-    #[doc = "Background color"]
-    pub canvas_color: Color,
-    #[doc = "Input color"]
-    pub input_color: Color,
-    #[doc = "Color of unselected options in the menu"]
-    pub unselected_color: Color,
-    #[doc = "Color of selected option in the menu"]
-    pub selected_color: Color,
-
-    #[doc = "Size of border around input"]
-    pub input_border: f64,
-    #[doc = "Color of border around input"]
-    pub input_border_color: Color,
-
-    #[doc = "Size of input box"]
-    pub input_size: [f64; 2],
-    #[doc = "Size of the output list"]
-    pub output_size: [f64; 2],
-
-    #[doc = "Padding above input"]
-    pub input_top_padding: f64,
-    #[doc = "Padding between input and output"]
-    pub output_top_padding: f64,
-
-    #[doc = "Path to a .ttf file with the font to use"]
-    pub font: String,
-
-    #[doc = "Disable escape to exit the menu - because it crashes on i3-gaps"]
-    pub disable_esc: bool,
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ColorsConfig {
+    pub background: [f32; 3],
+    pub text: [f32; 3],
+    pub highlight: [f32; 3],
+    pub font_size: f32,
 }
 
-impl Default for Config {
-    fn default() -> Config {
-        Config {
-            canvas_color: color::BLACK,
-            input_color: color::BLUE,
-            unselected_color: color::WHITE,
-            selected_color: color::RED,
+impl Default for ColorsConfig {
+    fn default() -> Self {
+        Self {
+            background: [0.1, 0.1, 0.1],
+            text: [1.0, 1.0, 1.0],
+            highlight: [0.3, 0.3, 0.7],
+            font_size: 16.0,
+        }
+    }
+}
 
-            input_border: 1.0,
-            input_border_color: color::BLACK,
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AppConfig {
+    pub position: (f32, f32),
+    pub font_name: String,
+}
 
-            input_size: [200.0, 25.0],
-            output_size: [200.0, 1000.0],
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            position: (100.0, 100.0),
+            font_name: "Ubuntu-M".to_string(),
+        }
+    }
+}
 
-            input_top_padding: 0.0,
-            output_top_padding: 0.0,
+pub fn get_config_paths() -> Option<(PathBuf, PathBuf)> {
+    let proj_dirs = ProjectDirs::from("com", "example", "rmenu")?;
+    let config_dir = proj_dirs.config_dir();
+    fs::create_dir_all(config_dir).ok()?;
+    let colors_path = config_dir.join("colors.ron");
+    let app_path = config_dir.join("app.ron");
+    Some((colors_path, app_path))
+}
 
-            font: "/usr/share/fonts/TTF/Ubuntu-M.ttf".into(),
+pub fn load_config<T: Default + for<'de> Deserialize<'de>>(path: &PathBuf) -> T {
+    if let Ok(mut file) = fs::File::open(path) {
+        let mut content = String::new();
+        if file.read_to_string(&mut content).is_ok() {
+            if let Ok(config) = from_str(&content) {
+                return config;
+            }
+        }
+    }
+    T::default()
+}
 
-            disable_esc: false,
+pub fn save_config<T: Serialize>(path: &PathBuf, config: &T) {
+    if let Ok(serialized) = to_string_pretty(config, PrettyConfig::default()) {
+        if let Ok(mut file) = fs::File::create(path) {
+            let _ = file.write_all(serialized.as_bytes());
         }
     }
 }

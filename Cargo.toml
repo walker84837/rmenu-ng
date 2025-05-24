@@ -1,13 +1,16 @@
 [package]
-name = "rmenu"
-version = "0.1.4"
-authors = ["SuperCuber <amit.gold00@gmail.com>"]
+name = "rmenu-ng"
+version = "0.2.0"
+authors = ["walker84837"]
 description = "A rofi and dmenu inspired menu"
-repository = "https://www.github.com/SuperCuber/rmenu"
+repository = "https://github.com/walker84837/rmenu-ng"
 readme = "README.md"
-keywords = ["rofi", "dmenu", "menu"]
-categories = ["command-line-utilities", "gui"]
-license = "WTFPL"
+edition = "2024"
+license = "WTFPL" # TODO: change license
 
 [dependencies]
-conrod = { version = "0.58.*", features = ["glium", "winit"] }
+directories = "6.0.0"
+eframe = "0.31.1"
+egui = "0.31.1"
+ron = "0.10.1"
+serde = { version = "1.0.219", features = ["derive"] }
