@@ -1,7 +1,7 @@
-// src/gui.rs
 use crate::config::{AppConfig, ColorsConfig};
 use eframe::egui::{self, CentralPanel, Context, FontData, FontDefinitions, FontFamily, TextEdit};
 use eframe::{App, CreationContext};
+use std::sync::Arc;
 
 pub struct RMenuApp {
     input_text: String,
@@ -16,14 +16,16 @@ impl RMenuApp {
         // Customize fonts if needed
         let mut fonts = FontDefinitions::default();
         fonts.font_data.insert(
-            "custom".to_string(),
-            FontData::from_static(include_bytes!("../fonts/Ubuntu-M.ttf")),
+            "Ubuntu Medium".to_string(),
+            Arc::new(FontData::from_static(include_bytes!(
+                "../assets/Ubuntu-M.ttf"
+            ))),
         );
         fonts
             .families
             .entry(FontFamily::Proportional)
             .or_default()
-            .insert(0, "custom".to_string());
+            .insert(0, "Ubuntu Medium".to_string());
         cc.egui_ctx.set_fonts(fonts);
 
         Self {
@@ -56,7 +58,7 @@ impl App for RMenuApp {
                 (self.colors.text[1] * 255.0) as u8,
                 (self.colors.text[2] * 255.0) as u8,
             ));
-            ui.style_mut().override_font_size = Some(self.colors.font_size);
+            // ui.style_mut().override_font_size = Some(self.colors.font_size);
 
             ui.add(
                 TextEdit::singleline(&mut self.input_text)
