@@ -1,4 +1,5 @@
 mod config;
+mod desktop_entry;
 mod gui;
 
 use config::{AppConfig, ColorsConfig, get_config_paths, load_config};

@@ -50,21 +50,21 @@ pub fn get_config_paths() -> Option<(PathBuf, PathBuf)> {
 }
 
 pub fn load_config<T: Default + for<'de> Deserialize<'de>>(path: &PathBuf) -> T {
-    if let Ok(mut file) = fs::File::open(path) {
-        let mut content = String::new();
-        if file.read_to_string(&mut content).is_ok() {
-            if let Ok(config) = from_str(&content) {
-                return config;
-            }
-        }
+    let mut content = String::new();
+    if let Ok(mut file) = fs::File::open(path)
+        && file.read_to_string(&mut content).is_ok()
+        && let Ok(config) = from_str(&content)
+    {
+        return config;
     }
     T::default()
 }
 
+#[allow(dead_code)]
 pub fn save_config<T: Serialize>(path: &PathBuf, config: &T) {
-    if let Ok(serialized) = to_string_pretty(config, PrettyConfig::default()) {
-        if let Ok(mut file) = fs::File::create(path) {
-            let _ = file.write_all(serialized.as_bytes());
-        }
+    if let Ok(serialized) = to_string_pretty(config, PrettyConfig::default())
+        && let Ok(mut file) = fs::File::create(path)
+    {
+        let _ = file.write_all(serialized.as_bytes());
     }
 }
