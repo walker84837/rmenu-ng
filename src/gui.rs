@@ -4,6 +4,7 @@ use eframe::egui::{self, Context, FontData, FontDefinitions, FontFamily, TextEdi
 use eframe::{App, CreationContext};
 use fuzzy_matcher::FuzzyMatcher;
 use fuzzy_matcher::skim::SkimMatcherV2;
+use linux_terminal_launch::{LaunchCommand, TerminalLauncher, TerminalPreference};
 use std::sync::Arc;
 
 pub struct RMenuApp {
@@ -14,6 +15,7 @@ pub struct RMenuApp {
     colors: ColorsConfig,
     #[allow(dead_code)]
     app_config: AppConfig,
+    locales: Vec<String>,
     matcher: SkimMatcherV2,
 }
 
@@ -33,7 +35,8 @@ impl RMenuApp {
             .insert(0, "Ubuntu Medium".to_string());
         cc.egui_ctx.set_fonts(fonts);
 
-        let all_applications = desktop_entry::get_all_applications();
+        let locales = freedesktop_desktop_entry::get_languages_from_env();
+        let all_applications = desktop_entry::get_all_applications(&locales);
         let filtered_applications = all_applications.clone();
 
         Self {
@@ -43,6 +46,7 @@ impl RMenuApp {
             filtered_applications,
             colors,
             app_config,
+            locales,
             matcher: SkimMatcherV2::default(),
         }
     }
@@ -57,15 +61,15 @@ impl RMenuApp {
                 .all_applications
                 .iter()
                 .filter_map(|app| {
-                    let name_score = self.matcher.fuzzy_match(&app.name, query);
+                    let name_score = app
+                        .name(&self.locales)
+                        .and_then(|n| self.matcher.fuzzy_match(n.as_ref(), query));
                     let generic_score = app
-                        .generic_name
-                        .as_ref()
-                        .and_then(|g| self.matcher.fuzzy_match(g, query));
+                        .generic_name(&self.locales)
+                        .and_then(|g| self.matcher.fuzzy_match(g.as_ref(), query));
                     let comment_score = app
-                        .comment
-                        .as_ref()
-                        .and_then(|c| self.matcher.fuzzy_match(c, query));
+                        .comment(&self.locales)
+                        .and_then(|c| self.matcher.fuzzy_match(c.as_ref(), query));
 
                     let best_score = [name_score, generic_score, comment_score]
                         .into_iter()
@@ -84,22 +88,29 @@ impl RMenuApp {
 
     fn execute_application(&self) {
         if let Some(app) = self.filtered_applications.get(self.selected_index)
-            && let Some(exec) = &app.exec
+            && let Some(exec) = app.exec()
         {
-            let mut cmd = std::process::Command::new("sh");
-            cmd.arg("-c");
-
-            let exec_str = if app.terminal {
-                format!("{} &; exit", exec)
+            if app.terminal() {
+                let launch_cmd = LaunchCommand::new("sh").args(["-c", exec]);
+                let mut launcher = TerminalLauncher::new()
+                    .preference(TerminalPreference::Auto)
+                    .launch_command(launch_cmd)
+                    .detach_from_parent(true);
+                if let Some(path) = app.path() {
+                    launcher = launcher.working_dir(path);
+                }
+                let _ = launcher.spawn();
             } else {
-                format!("{} &", exec)
-            };
-
-            if let Some(path) = &app.path {
-                cmd.current_dir(path);
+                let exec_str = format!("{} &", exec);
+                let mut cmd = std::process::Command::new("sh");
+                cmd.arg("-c").arg(&exec_str);
+                if let Some(path) = app.path() {
+                    cmd.current_dir(path);
+                }
+                let _ = cmd.spawn();
             }
 
-            let _ = cmd.arg(&exec_str).spawn();
+            std::process::exit(0);
         }
     }
 
@@ -176,14 +187,10 @@ impl App for RMenuApp {
                             ui.style_mut().visuals.widgets.hovered.bg_fill = highlight_color;
                         }
 
-                        let response = ui.selectable_label(is_selected, &app.name);
+                        let name = app.name(&self.locales).unwrap_or_default();
+                        let response = ui.selectable_label(is_selected, name.as_ref());
 
                         if response.clicked() {
-                            self.selected_index = i;
-                            self.execute_application();
-                        }
-
-                        if response.double_clicked() {
                             self.selected_index = i;
                             self.execute_application();
                         }

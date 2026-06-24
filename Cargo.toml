@@ -10,14 +10,11 @@ license = "WTFPL" # TODO: change license
 
 [dependencies]
 directories = "6.0.0"
-dirs = "6.0.0"
 eframe = "0.31.1"
 egui = "0.31.1"
+freedesktop-desktop-entry = "0.8"
 fuzzy-matcher = "0.3"
 image = "0.25"
+linux-terminal-launch = { git = "https://github.com/cst8t/linux-terminal-launch.git", rev = "1c2db9bb27d735fece63448cd3c0781e20a92437" }
 ron = "0.10.1"
 serde = { version = "1.0.219", features = ["derive"] }
-serde-aux = "4.7.0"
-serde_ini = "0.2"
-serde_json = "1.0.149"
-walkdir = "2.5"
